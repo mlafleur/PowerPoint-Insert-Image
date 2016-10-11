@@ -1,6 +1,5 @@
 ﻿/// <reference path="/Scripts/FabricUI/MessageBanner.js" />
 
-
 (function () {
     "use strict";
 
@@ -23,24 +22,27 @@
     function insertImage() {
         var base64Image = getBase64Image();
 
+        // Insert base64 encoded image
         Office.context.document.setSelectedDataAsync(base64Image,
             {
-                coercionType: "image",
-                imageLeft: 0,
+                coercionType: "image", 
+                imageLeft: 0, 
                 imageTop: 0
             },
             function (asyncResult) {
                 if (asyncResult.status === Office.AsyncResultStatus.Failed) {
-                    copyImage();
-                    //showNotification("Action Failed", asyncResult.error.message);
+
+                    // If we reach this point than we ran into an error 
+                    // inserting the image. Here we will fall back to using
+                    // the local clip-board. 
+                    copyImage();                    
                 }
                 showNotification("Complete", "The image has been inserted");
             });
     }
 
-    // Copies an image into the keyboard
-    function copyImage()
-    {
+    // Takes the image and adds it to the local clipboard
+    function copyImage() {
         var image = document.createElement("img");
         image.id = 'clipboardImage';
         $(image).css("display", "none");
