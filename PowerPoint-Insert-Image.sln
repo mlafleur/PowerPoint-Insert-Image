@@ -1,0 +1,30 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 14
+VisualStudioVersion = 14.0.25123.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PowerPoint-Insert-Image", "PowerPoint-Insert-Image\PowerPoint-Insert-Image.csproj", "{D07FF6DB-D36D-469E-824F-789D5FC66FA1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PowerPoint-Insert-ImageWeb", "PowerPoint-Insert-ImageWeb\PowerPoint-Insert-ImageWeb.csproj", "{E454709B-247B-4D08-BF5E-69915B1A1944}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{D07FF6DB-D36D-469E-824F-789D5FC66FA1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D07FF6DB-D36D-469E-824F-789D5FC66FA1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D07FF6DB-D36D-469E-824F-789D5FC66FA1}.Debug|Any CPU.Deploy.0 = Debug|Any CPU
+		{D07FF6DB-D36D-469E-824F-789D5FC66FA1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D07FF6DB-D36D-469E-824F-789D5FC66FA1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D07FF6DB-D36D-469E-824F-789D5FC66FA1}.Release|Any CPU.Deploy.0 = Release|Any CPU
+		{E454709B-247B-4D08-BF5E-69915B1A1944}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E454709B-247B-4D08-BF5E-69915B1A1944}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E454709B-247B-4D08-BF5E-69915B1A1944}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E454709B-247B-4D08-BF5E-69915B1A1944}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
