@@ -1,5 +1,5 @@
 /* Excel specific API library */
-/* Version: 15.0.4835.3001 */
+/* Version: 15.0.4879.1000 */
 /*
 	Copyright (c) Microsoft Corporation.  All rights reserved.
 */
@@ -838,7 +838,7 @@ var OfficeExt;
 			__extends(OutlookClientV1DefaultSetRequirement, _super);
 			function OutlookClientV1DefaultSetRequirement() {
 				_super.call(this, {
-					"mailbox": 1.2
+					"mailbox": 1.1
 				});
 			}
 			return OutlookClientV1DefaultSetRequirement;
@@ -848,7 +848,7 @@ var OfficeExt;
 			__extends(OutlookClientV2DefaultSetRequirement, _super);
 			function OutlookClientV2DefaultSetRequirement() {
 				_super.call(this, {
-					"mailbox": 1.3
+					"mailbox": 1.2
 				});
 			}
 			return OutlookClientV2DefaultSetRequirement;
@@ -858,7 +858,7 @@ var OfficeExt;
 			__extends(OutlookClientV3DefaultSetRequirement, _super);
 			function OutlookClientV3DefaultSetRequirement() {
 				_super.call(this, {
-					"mailbox": 1.4
+					"mailbox": 1.3
 				});
 			}
 			return OutlookClientV3DefaultSetRequirement;
@@ -1660,11 +1660,13 @@ Microsoft.Office.Common.XdmCommunicationManager=(function () {
 		_blockingFlag=false;
 	};
 	function _registerListener(listener) {
-		if ((Sys.Browser.agent===Sys.Browser.InternetExplorer) && window.attachEvent) {
-			window.attachEvent("onmessage", listener);
-		} else if (window.addEventListener) {
+		if (window.addEventListener) {
 			window.addEventListener("message", listener, false);
-		} else {
+		}
+		else if ((navigator.userAgent.indexOf("MSIE") > -1) && window.attachEvent) {
+			window.attachEvent("onmessage", listener);
+		}
+		else {
 			OsfMsAjaxFactory.msAjaxDebug.trace("Browser doesn't support the required API.");
 			throw OsfMsAjaxFactory.msAjaxError.argument("Browser");
 		}
@@ -5153,7 +5155,7 @@ OSF.O15HostSpecificFileVersion={
 			"1"   : "15.02",
 			"2"  : "15.02",
 			"4"   : "15.02",
-			"8"  : "15.03",
+			"8"  : "15.04",
 			"16"   : "15.02",
 			"128"  : "15.02"
 		};
@@ -5185,9 +5187,15 @@ var OfficeExt;
 		function MicrosoftAjaxFactory() {
 		}
 		MicrosoftAjaxFactory.prototype.isMsAjaxLoaded=function () {
-			if (typeof (Sys) !=='undefined' && typeof (Type) !=='undefined' && Sys.StringBuilder && typeof (Sys.StringBuilder)==="function" && Type.registerNamespace && typeof (Type.registerNamespace)==="function" && Type.registerClass && typeof (Type.registerClass)==="function" && typeof (Function._validateParams)==="function") {
+			if (typeof (Sys) !=='undefined' && typeof (Type) !=='undefined' &&
+				Sys.StringBuilder && typeof (Sys.StringBuilder)==="function" &&
+				Type.registerNamespace && typeof (Type.registerNamespace)==="function" &&
+				Type.registerClass && typeof (Type.registerClass)==="function" &&
+				typeof (Function._validateParams)==="function" &&
+				Sys.Serialization && Sys.Serialization.JavaScriptSerializer && typeof (Sys.Serialization.JavaScriptSerializer.serialize)==="function") {
 				return true;
-			} else {
+			}
+			else {
 				return false;
 			}
 		};
@@ -5252,15 +5260,665 @@ var OfficeExt;
 	OfficeExt.MicrosoftAjaxFactory=MicrosoftAjaxFactory;
 })(OfficeExt || (OfficeExt={}));
 var OsfMsAjaxFactory=new OfficeExt.MicrosoftAjaxFactory();
-if (!OsfMsAjaxFactory.isMsAjaxLoaded()) {
-	if (!(OSF._OfficeAppFactory && OSF._OfficeAppFactory && OSF._OfficeAppFactory.getLoadScriptHelper && OSF._OfficeAppFactory.getLoadScriptHelper().isScriptLoading(OSF.ConstantNames.MicrosoftAjaxId))) {
-		OsfMsAjaxFactory.loadMsAjaxFull(function OSF$loadMSAjaxCallback() {
-			if (!OsfMsAjaxFactory.isMsAjaxLoaded()) {
-				throw 'Not able to load MicrosoftAjax.js.';
+(function (OfficeExt) {
+	var MsAjaxTypeHelper=(function () {
+		function MsAjaxTypeHelper() {
+		}
+		MsAjaxTypeHelper.isInstanceOfType=function (type, instance) {
+			if (typeof (instance)==="undefined" || instance===null)
+				return false;
+			if (instance instanceof type)
+				return true;
+			var instanceType=instance.constructor;
+			if (!instanceType || (typeof (instanceType) !=="function") || !instanceType.__typeName || instanceType.__typeName==='Object') {
+				instanceType=Object;
 			}
-		});
+			return !!(instanceType===type) ||
+				(instanceType.__typeName && type.__typeName && instanceType.__typeName===type.__typeName);
+		};
+		return MsAjaxTypeHelper;
+	})();
+	OfficeExt.MsAjaxTypeHelper=MsAjaxTypeHelper;
+	var MsAjaxError=(function () {
+		function MsAjaxError() {
+		}
+		MsAjaxError.create=function (message, errorInfo) {
+			var err=new Error(message);
+			err.message=message;
+			if (errorInfo) {
+				for (var v in errorInfo) {
+					err[v]=errorInfo[v];
+				}
+			}
+			err.popStackFrame();
+			return err;
+		};
+		MsAjaxError.parameterCount=function (message) {
+			var displayMessage="Sys.ParameterCountException: "+(message ? message : "Parameter count mismatch.");
+			var err=MsAjaxError.create(displayMessage, { name: 'Sys.ParameterCountException' });
+			err.popStackFrame();
+			return err;
+		};
+		MsAjaxError.argument=function (paramName, message) {
+			var displayMessage="Sys.ArgumentException: "+(message ? message : "Value does not fall within the expected range.");
+			if (paramName) {
+				displayMessage+="\n"+MsAjaxString.format("Parameter name: {0}", paramName);
+			}
+			var err=MsAjaxError.create(displayMessage, { name: "Sys.ArgumentException", paramName: paramName });
+			err.popStackFrame();
+			return err;
+		};
+		MsAjaxError.argumentNull=function (paramName, message) {
+			var displayMessage="Sys.ArgumentNullException: "+(message ? message : "Value cannot be null.");
+			if (paramName) {
+				displayMessage+="\n"+MsAjaxString.format("Parameter name: {0}", paramName);
+			}
+			var err=MsAjaxError.create(displayMessage, { name: "Sys.ArgumentNullException", paramName: paramName });
+			err.popStackFrame();
+			return err;
+		};
+		MsAjaxError.argumentOutOfRange=function (paramName, actualValue, message) {
+			var displayMessage="Sys.ArgumentOutOfRangeException: "+(message ? message : "Specified argument was out of the range of valid values.");
+			if (paramName) {
+				displayMessage+="\n"+MsAjaxString.format("Parameter name: {0}", paramName);
+			}
+			if (typeof (actualValue) !=="undefined" && actualValue !==null) {
+				displayMessage+="\n"+MsAjaxString.format("Actual value was {0}.", actualValue);
+			}
+			var err=MsAjaxError.create(displayMessage, {
+				name: "Sys.ArgumentOutOfRangeException",
+				paramName: paramName,
+				actualValue: actualValue
+			});
+			err.popStackFrame();
+			return err;
+		};
+		MsAjaxError.argumentType=function (paramName, actualType, expectedType, message) {
+			var displayMessage="Sys.ArgumentTypeException: ";
+			if (message) {
+				displayMessage+=message;
+			}
+			else if (actualType && expectedType) {
+				displayMessage+=MsAjaxString.format("Object of type '{0}' cannot be converted to type '{1}'.", actualType.getName ? actualType.getName() : actualType, expectedType.getName ? expectedType.getName() : expectedType);
+			}
+			else {
+				displayMessage+="Object cannot be converted to the required type.";
+			}
+			if (paramName) {
+				displayMessage+="\n"+MsAjaxString.format("Parameter name: {0}", paramName);
+			}
+			var err=MsAjaxError.create(displayMessage, {
+				name: "Sys.ArgumentTypeException",
+				paramName: paramName,
+				actualType: actualType,
+				expectedType: expectedType
+			});
+			err.popStackFrame();
+			return err;
+		};
+		MsAjaxError.argumentUndefined=function (paramName, message) {
+			var displayMessage="Sys.ArgumentUndefinedException: "+(message ? message : "Value cannot be undefined.");
+			if (paramName) {
+				displayMessage+="\n"+MsAjaxString.format("Parameter name: {0}", paramName);
+			}
+			var err=MsAjaxError.create(displayMessage, { name: "Sys.ArgumentUndefinedException", paramName: paramName });
+			err.popStackFrame();
+			return err;
+		};
+		MsAjaxError.invalidOperation=function (message) {
+			var displayMessage="Sys.InvalidOperationException: "+(message ? message : "Operation is not valid due to the current state of the object.");
+			var err=MsAjaxError.create(displayMessage, { name: 'Sys.InvalidOperationException' });
+			err.popStackFrame();
+			return err;
+		};
+		return MsAjaxError;
+	})();
+	OfficeExt.MsAjaxError=MsAjaxError;
+	var MsAjaxString=(function () {
+		function MsAjaxString() {
+		}
+		MsAjaxString.format=function (format) {
+			var args=[];
+			for (var _i=1; _i < arguments.length; _i++) {
+				args[_i - 1]=arguments[_i];
+			}
+			var source=format;
+			return source.replace(/{(\d+)}/gm, function (match, number) {
+				var index=parseInt(number, 10);
+				return args[index]===undefined ? '{'+number+'}' : args[index];
+			});
+		};
+		MsAjaxString.startsWith=function (str, prefix) {
+			return (str.substr(0, prefix.length)===prefix);
+		};
+		return MsAjaxString;
+	})();
+	OfficeExt.MsAjaxString=MsAjaxString;
+	var MsAjaxDebug=(function () {
+		function MsAjaxDebug() {
+		}
+		MsAjaxDebug.trace=function (text) {
+			if (typeof Debug !=="undefined" && Debug.writeln)
+				Debug.writeln(text);
+			if (window.console && window.console.log)
+				window.console.log(text);
+			if (window.opera && window.opera.postError)
+				window.opera.postError(text);
+			if (window.debugService && window.debugService.trace)
+				window.debugService.trace(text);
+			var a=document.getElementById("TraceConsole");
+			if (a && a.tagName.toUpperCase()==="TEXTAREA") {
+				a.innerHTML+=text+"\n";
+			}
+		};
+		return MsAjaxDebug;
+	})();
+	OfficeExt.MsAjaxDebug=MsAjaxDebug;
+	if (!OsfMsAjaxFactory.isMsAjaxLoaded()) {
+		var registerTypeInternal=function registerTypeInternal(type, name, isClass) {
+			if (type.__typeName===undefined) {
+				type.__typeName=name;
+			}
+			if (type.__class===undefined) {
+				type.__class=isClass;
+			}
+		};
+		registerTypeInternal(Function, "Function", true);
+		registerTypeInternal(Error, "Error", true);
+		registerTypeInternal(Object, "Object", true);
+		registerTypeInternal(String, "String", true);
+		registerTypeInternal(Boolean, "Boolean", true);
+		registerTypeInternal(Date, "Date", true);
+		registerTypeInternal(Number, "Number", true);
+		registerTypeInternal(RegExp, "RegExp", true);
+		registerTypeInternal(Array, "Array", true);
+		if (!Function.createCallback) {
+			Function.createCallback=function Function$createCallback(method, context) {
+				var e=Function._validateParams(arguments, [
+					{ name: "method", type: Function },
+					{ name: "context", mayBeNull: true }
+				]);
+				if (e)
+					throw e;
+				return function () {
+					var l=arguments.length;
+					if (l > 0) {
+						var args=[];
+						for (var i=0; i < l; i++) {
+							args[i]=arguments[i];
+						}
+						args[l]=context;
+						return method.apply(this, args);
+					}
+					return method.call(this, context);
+				};
+			};
+		}
+		if (!Function.createDelegate) {
+			Function.createDelegate=function Function$createDelegate(instance, method) {
+				var e=Function._validateParams(arguments, [
+					{ name: "instance", mayBeNull: true },
+					{ name: "method", type: Function }
+				]);
+				if (e)
+					throw e;
+				return function () {
+					return method.apply(instance, arguments);
+				};
+			};
+		}
+		if (!Function._validateParams) {
+			Function._validateParams=function (params, expectedParams, validateParameterCount) {
+				var e, expectedLength=expectedParams.length;
+				validateParameterCount=validateParameterCount || (typeof (validateParameterCount)==="undefined");
+				e=Function._validateParameterCount(params, expectedParams, validateParameterCount);
+				if (e) {
+					e.popStackFrame();
+					return e;
+				}
+				for (var i=0, l=params.length; i < l; i++) {
+					var expectedParam=expectedParams[Math.min(i, expectedLength - 1)], paramName=expectedParam.name;
+					if (expectedParam.parameterArray) {
+						paramName+="["+(i - expectedLength+1)+"]";
+					}
+					else if (!validateParameterCount && (i >=expectedLength)) {
+						break;
+					}
+					e=Function._validateParameter(params[i], expectedParam, paramName);
+					if (e) {
+						e.popStackFrame();
+						return e;
+					}
+				}
+				return null;
+			};
+		}
+		if (!Function._validateParameterCount) {
+			Function._validateParameterCount=function (params, expectedParams, validateParameterCount) {
+				var i, error, expectedLen=expectedParams.length, actualLen=params.length;
+				if (actualLen < expectedLen) {
+					var minParams=expectedLen;
+					for (i=0; i < expectedLen; i++) {
+						var param=expectedParams[i];
+						if (param.optional || param.parameterArray) {
+							minParams--;
+						}
+					}
+					if (actualLen < minParams) {
+						error=true;
+					}
+				}
+				else if (validateParameterCount && (actualLen > expectedLen)) {
+					error=true;
+					for (i=0; i < expectedLen; i++) {
+						if (expectedParams[i].parameterArray) {
+							error=false;
+							break;
+						}
+					}
+				}
+				if (error) {
+					var e=MsAjaxError.parameterCount();
+					e.popStackFrame();
+					return e;
+				}
+				return null;
+			};
+		}
+		if (!Function._validateParameter) {
+			Function._validateParameter=function (param, expectedParam, paramName) {
+				var e, expectedType=expectedParam.type, expectedInteger=!!expectedParam.integer, expectedDomElement=!!expectedParam.domElement, mayBeNull=!!expectedParam.mayBeNull;
+				e=Function._validateParameterType(param, expectedType, expectedInteger, expectedDomElement, mayBeNull, paramName);
+				if (e) {
+					e.popStackFrame();
+					return e;
+				}
+				var expectedElementType=expectedParam.elementType, elementMayBeNull=!!expectedParam.elementMayBeNull;
+				if (expectedType===Array && typeof (param) !=="undefined" && param !==null &&
+					(expectedElementType || !elementMayBeNull)) {
+					var expectedElementInteger=!!expectedParam.elementInteger, expectedElementDomElement=!!expectedParam.elementDomElement;
+					for (var i=0; i < param.length; i++) {
+						var elem=param[i];
+						e=Function._validateParameterType(elem, expectedElementType, expectedElementInteger, expectedElementDomElement, elementMayBeNull, paramName+"["+i+"]");
+						if (e) {
+							e.popStackFrame();
+							return e;
+						}
+					}
+				}
+				return null;
+			};
+		}
+		if (!Function._validateParameterType) {
+			Function._validateParameterType=function (param, expectedType, expectedInteger, expectedDomElement, mayBeNull, paramName) {
+				var e, i;
+				if (typeof (param)==="undefined") {
+					if (mayBeNull) {
+						return null;
+					}
+					else {
+						e=OfficeExt.MsAjaxError.argumentUndefined(paramName);
+						e.popStackFrame();
+						return e;
+					}
+				}
+				if (param===null) {
+					if (mayBeNull) {
+						return null;
+					}
+					else {
+						e=OfficeExt.MsAjaxError.argumentNull(paramName);
+						e.popStackFrame();
+						return e;
+					}
+				}
+				if (expectedType && !OfficeExt.MsAjaxTypeHelper.isInstanceOfType(expectedType, param)) {
+					e=OfficeExt.MsAjaxError.argumentType(paramName, typeof (param), expectedType);
+					e.popStackFrame();
+					return e;
+				}
+				return null;
+			};
+		}
+		if (!window.Type) {
+			window.Type=Function;
+		}
+		if (!Type.registerNamespace) {
+			Type.registerNamespace=function (ns) {
+				var namespaceParts=ns.split('.');
+				var currentNamespace=window;
+				for (var i=0; i < namespaceParts.length; i++) {
+					currentNamespace[namespaceParts[i]]=currentNamespace[namespaceParts[i]] || {};
+					currentNamespace=currentNamespace[namespaceParts[i]];
+				}
+			};
+		}
+		if (!Type.prototype.registerClass) {
+			Type.prototype.registerClass=function (cls) { cls={}; };
+		}
+		if (typeof (Sys)==="undefined") {
+			Type.registerNamespace('Sys');
+		}
+		if (!Error.prototype.popStackFrame) {
+			Error.prototype.popStackFrame=function () {
+				if (arguments.length !==0)
+					throw MsAjaxError.parameterCount();
+				if (typeof (this.stack)==="undefined" || this.stack===null ||
+					typeof (this.fileName)==="undefined" || this.fileName===null ||
+					typeof (this.lineNumber)==="undefined" || this.lineNumber===null) {
+					return;
+				}
+				var stackFrames=this.stack.split("\n");
+				var currentFrame=stackFrames[0];
+				var pattern=this.fileName+":"+this.lineNumber;
+				while (typeof (currentFrame) !=="undefined" &&
+					currentFrame !==null &&
+					currentFrame.indexOf(pattern)===-1) {
+					stackFrames.shift();
+					currentFrame=stackFrames[0];
+				}
+				var nextFrame=stackFrames[1];
+				if (typeof (nextFrame)==="undefined" || nextFrame===null) {
+					return;
+				}
+				var nextFrameParts=nextFrame.match(/@(.*):(\d+)$/);
+				if (typeof (nextFrameParts)==="undefined" || nextFrameParts===null) {
+					return;
+				}
+				this.fileName=nextFrameParts[1];
+				this.lineNumber=parseInt(nextFrameParts[2]);
+				stackFrames.shift();
+				this.stack=stackFrames.join("\n");
+			};
+		}
+		OsfMsAjaxFactory.msAjaxError=MsAjaxError;
+		OsfMsAjaxFactory.msAjaxString=MsAjaxString;
+		OsfMsAjaxFactory.msAjaxDebug=MsAjaxDebug;
 	}
-}
+})(OfficeExt || (OfficeExt={}));
+var OfficeExt;
+(function (OfficeExt) {
+	var MsAjaxJavaScriptSerializer=(function () {
+		function MsAjaxJavaScriptSerializer() {
+		}
+		MsAjaxJavaScriptSerializer._init=function () {
+			var replaceChars=['\\u0000', '\\u0001', '\\u0002', '\\u0003', '\\u0004', '\\u0005', '\\u0006', '\\u0007',
+				'\\b', '\\t', '\\n', '\\u000b', '\\f', '\\r', '\\u000e', '\\u000f', '\\u0010', '\\u0011',
+				'\\u0012', '\\u0013', '\\u0014', '\\u0015', '\\u0016', '\\u0017', '\\u0018', '\\u0019',
+				'\\u001a', '\\u001b', '\\u001c', '\\u001d', '\\u001e', '\\u001f'];
+			MsAjaxJavaScriptSerializer._charsToEscape[0]='\\';
+			MsAjaxJavaScriptSerializer._charsToEscapeRegExs['\\']=new RegExp('\\\\', 'g');
+			MsAjaxJavaScriptSerializer._escapeChars['\\']='\\\\';
+			MsAjaxJavaScriptSerializer._charsToEscape[1]='"';
+			MsAjaxJavaScriptSerializer._charsToEscapeRegExs['"']=new RegExp('"', 'g');
+			MsAjaxJavaScriptSerializer._escapeChars['"']='\\"';
+			for (var i=0; i < 32; i++) {
+				var c=String.fromCharCode(i);
+				MsAjaxJavaScriptSerializer._charsToEscape[i+2]=c;
+				MsAjaxJavaScriptSerializer._charsToEscapeRegExs[c]=new RegExp(c, 'g');
+				MsAjaxJavaScriptSerializer._escapeChars[c]=replaceChars[i];
+			}
+		};
+		MsAjaxJavaScriptSerializer.serialize=function (object) {
+			var stringBuilder=new MsAjaxStringBuilder();
+			MsAjaxJavaScriptSerializer.serializeWithBuilder(object, stringBuilder, false);
+			return stringBuilder.toString();
+		};
+		MsAjaxJavaScriptSerializer.deserialize=function (data, secure) {
+			if (data.length===0)
+				throw OfficeExt.MsAjaxError.argument('data', "Cannot deserialize empty string.");
+			try {
+				var exp=data.replace(MsAjaxJavaScriptSerializer._dateRegEx, "$1new Date($2)");
+				if (secure && MsAjaxJavaScriptSerializer._jsonRegEx.test(exp.replace(MsAjaxJavaScriptSerializer._jsonStringRegEx, '')))
+					throw null;
+				return eval('('+exp+')');
+			}
+			catch (e) {
+				throw OfficeExt.MsAjaxError.argument('data', "Cannot deserialize. The data does not correspond to valid JSON.");
+			}
+		};
+		MsAjaxJavaScriptSerializer.serializeBooleanWithBuilder=function (object, stringBuilder) {
+			stringBuilder.append(object.toString());
+		};
+		MsAjaxJavaScriptSerializer.serializeNumberWithBuilder=function (object, stringBuilder) {
+			if (isFinite(object)) {
+				stringBuilder.append(String(object));
+			}
+			else {
+				throw OfficeExt.MsAjaxError.invalidOperation("Cannot serialize non finite numbers.");
+			}
+		};
+		MsAjaxJavaScriptSerializer.serializeStringWithBuilder=function (str, stringBuilder) {
+			stringBuilder.append('"');
+			if (MsAjaxJavaScriptSerializer._escapeRegEx.test(str)) {
+				if (MsAjaxJavaScriptSerializer._charsToEscape.length===0) {
+					MsAjaxJavaScriptSerializer._init();
+				}
+				if (str.length < 128) {
+					str=str.replace(MsAjaxJavaScriptSerializer._escapeRegExGlobal, function (x) { return MsAjaxJavaScriptSerializer._escapeChars[x]; });
+				}
+				else {
+					for (var i=0; i < 34; i++) {
+						var c=MsAjaxJavaScriptSerializer._charsToEscape[i];
+						if (str.indexOf(c) !==-1) {
+							if ((navigator.userAgent.indexOf("OPR/") > -1) || (navigator.userAgent.indexOf("Firefox") > -1)) {
+								str=str.split(c).join(MsAjaxJavaScriptSerializer._escapeChars[c]);
+							}
+							else {
+								str=str.replace(MsAjaxJavaScriptSerializer._charsToEscapeRegExs[c], MsAjaxJavaScriptSerializer._escapeChars[c]);
+							}
+						}
+					}
+				}
+			}
+			stringBuilder.append(str);
+			stringBuilder.append('"');
+		};
+		MsAjaxJavaScriptSerializer.serializeWithBuilder=function (object, stringBuilder, sort, prevObjects) {
+			var i;
+			switch (typeof object) {
+				case 'object':
+					if (object) {
+						if (prevObjects) {
+							for (var j=0; j < prevObjects.length; j++) {
+								if (prevObjects[j]===object) {
+									throw OfficeExt.MsAjaxError.invalidOperation("Cannot serialize object with cyclic reference within child properties.");
+								}
+							}
+						}
+						else {
+							prevObjects=new Array();
+						}
+						try {
+							OfficeExt.MsAjaxArray.add(prevObjects, object);
+							if (OfficeExt.MsAjaxTypeHelper.isInstanceOfType(Number, object)) {
+								MsAjaxJavaScriptSerializer.serializeNumberWithBuilder(object, stringBuilder);
+							}
+							else if (OfficeExt.MsAjaxTypeHelper.isInstanceOfType(Boolean, object)) {
+								MsAjaxJavaScriptSerializer.serializeBooleanWithBuilder(object, stringBuilder);
+							}
+							else if (OfficeExt.MsAjaxTypeHelper.isInstanceOfType(String, object)) {
+								MsAjaxJavaScriptSerializer.serializeStringWithBuilder(object, stringBuilder);
+							}
+							else if (OfficeExt.MsAjaxTypeHelper.isInstanceOfType(Array, object)) {
+								stringBuilder.append('[');
+								for (i=0; i < object.length;++i) {
+									if (i > 0) {
+										stringBuilder.append(',');
+									}
+									MsAjaxJavaScriptSerializer.serializeWithBuilder(object[i], stringBuilder, false, prevObjects);
+								}
+								stringBuilder.append(']');
+							}
+							else {
+								if (OfficeExt.MsAjaxTypeHelper.isInstanceOfType(Date, object)) {
+									stringBuilder.append('"\\/Date(');
+									stringBuilder.append(object.getTime());
+									stringBuilder.append(')\\/"');
+									break;
+								}
+								var properties=[];
+								var propertyCount=0;
+								for (var name in object) {
+									if (OfficeExt.MsAjaxString.startsWith(name, '$')) {
+										continue;
+									}
+									if (name===MsAjaxJavaScriptSerializer._serverTypeFieldName && propertyCount !==0) {
+										properties[propertyCount++]=properties[0];
+										properties[0]=name;
+									}
+									else {
+										properties[propertyCount++]=name;
+									}
+								}
+								if (sort)
+									properties.sort();
+								stringBuilder.append('{');
+								var needComma=false;
+								for (i=0; i < propertyCount; i++) {
+									var value=object[properties[i]];
+									if (typeof value !=='undefined' && typeof value !=='function') {
+										if (needComma) {
+											stringBuilder.append(',');
+										}
+										else {
+											needComma=true;
+										}
+										MsAjaxJavaScriptSerializer.serializeWithBuilder(properties[i], stringBuilder, sort, prevObjects);
+										stringBuilder.append(':');
+										MsAjaxJavaScriptSerializer.serializeWithBuilder(value, stringBuilder, sort, prevObjects);
+									}
+								}
+								stringBuilder.append('}');
+							}
+						}
+						finally {
+							OfficeExt.MsAjaxArray.removeAt(prevObjects, prevObjects.length - 1);
+						}
+					}
+					else {
+						stringBuilder.append('null');
+					}
+					break;
+				case 'number':
+					MsAjaxJavaScriptSerializer.serializeNumberWithBuilder(object, stringBuilder);
+					break;
+				case 'string':
+					MsAjaxJavaScriptSerializer.serializeStringWithBuilder(object, stringBuilder);
+					break;
+				case 'boolean':
+					MsAjaxJavaScriptSerializer.serializeBooleanWithBuilder(object, stringBuilder);
+					break;
+				default:
+					stringBuilder.append('null');
+					break;
+			}
+		};
+		MsAjaxJavaScriptSerializer.__patchVersion=0;
+		MsAjaxJavaScriptSerializer._charsToEscapeRegExs=[];
+		MsAjaxJavaScriptSerializer._charsToEscape=[];
+		MsAjaxJavaScriptSerializer._dateRegEx=new RegExp('(^|[^\\\\])\\"\\\\/Date\\((-?[0-9]+)(?:[a-zA-Z]|(?:\\+|-)[0-9]{4})?\\)\\\\/\\"', 'g');
+		MsAjaxJavaScriptSerializer._escapeChars={};
+		MsAjaxJavaScriptSerializer._escapeRegEx=new RegExp('["\\\\\\x00-\\x1F]', 'i');
+		MsAjaxJavaScriptSerializer._escapeRegExGlobal=new RegExp('["\\\\\\x00-\\x1F]', 'g');
+		MsAjaxJavaScriptSerializer._jsonRegEx=new RegExp('[^,:{}\\[\\]0-9.\\-+Eaeflnr-u \\n\\r\\t]', 'g');
+		MsAjaxJavaScriptSerializer._jsonStringRegEx=new RegExp('"(\\\\.|[^"\\\\])*"', 'g');
+		MsAjaxJavaScriptSerializer._serverTypeFieldName='__type';
+		return MsAjaxJavaScriptSerializer;
+	})();
+	OfficeExt.MsAjaxJavaScriptSerializer=MsAjaxJavaScriptSerializer;
+	var MsAjaxArray=(function () {
+		function MsAjaxArray() {
+		}
+		MsAjaxArray.add=function (array, item) {
+			array[array.length]=item;
+		};
+		MsAjaxArray.removeAt=function (array, index) {
+			array.splice(index, 1);
+		};
+		MsAjaxArray.clone=function (array) {
+			if (array.length===1) {
+				return [array[0]];
+			}
+			else {
+				return Array.apply(null, array);
+			}
+		};
+		MsAjaxArray.remove=function (array, item) {
+			var index=MsAjaxArray.indexOf(array, item);
+			if (index >=0) {
+				array.splice(index, 1);
+			}
+			return (index >=0);
+		};
+		MsAjaxArray.indexOf=function (array, item, start) {
+			if (typeof (item)==="undefined")
+				return -1;
+			var length=array.length;
+			if (length !==0) {
+				start=start - 0;
+				if (isNaN(start)) {
+					start=0;
+				}
+				else {
+					if (isFinite(start)) {
+						start=start - (start % 1);
+					}
+					if (start < 0) {
+						start=Math.max(0, length+start);
+					}
+				}
+				for (var i=start; i < length; i++) {
+					if ((typeof (array[i]) !=="undefined") && (array[i]===item)) {
+						return i;
+					}
+				}
+			}
+			return -1;
+		};
+		return MsAjaxArray;
+	})();
+	OfficeExt.MsAjaxArray=MsAjaxArray;
+	var MsAjaxStringBuilder=(function () {
+		function MsAjaxStringBuilder(initialText) {
+			this._parts=(typeof (initialText) !=='undefined' && initialText !==null && initialText !=='') ?
+				[initialText.toString()] : [];
+			this._value={};
+			this._len=0;
+		}
+		MsAjaxStringBuilder.prototype.append=function (text) {
+			this._parts[this._parts.length]=text;
+		};
+		MsAjaxStringBuilder.prototype.toString=function (separator) {
+			separator=separator || '';
+			var parts=this._parts;
+			if (this._len !==parts.length) {
+				this._value={};
+				this._len=parts.length;
+			}
+			var val=this._value;
+			if (typeof (val[separator])==='undefined') {
+				if (separator !=='') {
+					for (var i=0; i < parts.length;) {
+						if ((typeof (parts[i])==='undefined') || (parts[i]==='') || (parts[i]===null)) {
+							parts.splice(i, 1);
+						}
+						else {
+							i++;
+						}
+					}
+				}
+				val[separator]=this._parts.join(separator);
+			}
+			return val[separator];
+		};
+		return MsAjaxStringBuilder;
+	})();
+	OfficeExt.MsAjaxStringBuilder=MsAjaxStringBuilder;
+	if (!OsfMsAjaxFactory.isMsAjaxLoaded()) {
+		OsfMsAjaxFactory.msAjaxSerializer=MsAjaxJavaScriptSerializer;
+	}
+})(OfficeExt || (OfficeExt={}));
 var __extends=this.__extends || function (d, b) {
 	function __() { this.constructor=d; }
 	__.prototype=b.prototype;
@@ -5438,6 +6096,16 @@ var OSFLog;
 			enumerable: true,
 			configurable: true
 		});
+		Object.defineProperty(AppActivatedUsageData.prototype, "DocUrl", {
+			get: function () {
+				return this.Fields["DocUrl"];
+			},
+			set: function (value) {
+				this.Fields["DocUrl"]=value;
+			},
+			enumerable: true,
+			configurable: true
+		});
 		AppActivatedUsageData.prototype.SerializeFields=function () {
 			this.SetSerializedField("CorrelationId", this.CorrelationId);
 			this.SetSerializedField("SessionId", this.SessionId);
@@ -5452,6 +6120,7 @@ var OSFLog;
 			this.SetSerializedField("ClientId", this.ClientId);
 			this.SetSerializedField("AppSizeWidth", this.AppSizeWidth);
 			this.SetSerializedField("AppSizeHeight", this.AppSizeHeight);
+			this.SetSerializedField("DocUrl", this.DocUrl);
 		};
 		return AppActivatedUsageData;
 	})(BaseUsageData);
@@ -5959,8 +6628,14 @@ var OSFAppTelemetry;
 		if (appInfo.appInstanceId) {
 			appInfo.appInstanceId=appInfo.appInstanceId.replace(/[{}]/g, "").toLowerCase();
 		}
-		var index=location.href.indexOf("?");
-		appInfo.appURL=(index==-1) ? location.href : location.href.substring(0, index);
+		var omexDomainRegex=new RegExp("^https?://store\\.office(ppe|-int)?\\.com/", "i");
+		var docUrl=context.get_docUrl();
+		appInfo.docUrl=omexDomainRegex.test(docUrl) ? docUrl : "";
+		var url=location.href;
+		if (url) {
+			url=url.split("?")[0].split("#")[0];
+		}
+		appInfo.appURL=url;
 		(function getUserIdAndAssetIdFromToken(token, appInfo) {
 			var xmlContent;
 			var parser;
@@ -6045,6 +6720,7 @@ var OSFAppTelemetry;
 		data.AppSizeWidth=window.innerWidth;
 		data.AppSizeHeight=window.innerHeight;
 		data.AppInstanceId=appInfo.appInstanceId;
+		data.DocUrl=appInfo.docUrl;
 		(new AppLogger()).LogData(data);
 		setTimeout(function () {
 			if (!OSF.Logger) {
@@ -6162,6 +6838,19 @@ OSF.InitializationHelper=function OSF_InitializationHelper(hostInfo, webAppState
 OSF.InitializationHelper.prototype.getAppContext=function OSF_InitializationHelper$getAppContext(wnd, gotAppContext) {
 	if (this._hostInfo.isRichClient) {
 		var returnedContext;
+		var context;
+		var warningText="Warning: Office.js is loaded outside of Office client";
+		try {
+			if (window.external && typeof window.external.GetContext !=='undefined') {
+				context=OSF.DDA._OsfControlContext=window.external.GetContext();
+			} else {
+				OsfMsAjaxFactory.msAjaxDebug.trace(warningText);
+				return;
+			}
+		} catch (e) {
+			OsfMsAjaxFactory.msAjaxDebug.trace(warningText);
+			return;
+		}
 		var context=window.external.GetContext();
 		var appType=context.GetAppType();
 		var appTypeSupported=false;
@@ -6331,6 +7020,36 @@ OSF.InitializationHelper.prototype.prepareRightBeforeWebExtensionInitialize=func
 		}
 		return windowObject;
 	};
+	if (this._hostInfo.isRichClient) {
+		var isOldOutlook=true;
+		try {
+			isOldOutlook=appContext.get_appName()==OSF.AppName.Outlook
+							&& (parseFloat(appContext.get_appVersion()) < 15.04);
+		}
+		catch (ex){}
+		if(!isOldOutlook) {
+			if (appContext.get_isDialog()) {
+				if (OSF.DDA.UI.ChildUI) {
+					appContext.ui=new OSF.DDA.UI.ChildUI();
+				}
+			} else {
+				if (OSF.DDA.UI.ParentUI) {
+					appContext.ui=new OSF.DDA.UI.ParentUI();
+				}
+			}
+		}
+		if(OSF.DDA.SafeArray !=undefined){
+	        var parameterMap=OSF.DDA.SafeArray.Delegate.ParameterMap;
+			var args={};
+			args[OSF.DDA.EventDescriptors.DialogMessageReceivedEvent]=OSF.DDA.SafeArray.Delegate.ParameterMap.self;
+			parameterMap.setMapping(OSF.DDA.EventDispId.dispidDialogMessageReceivedEvent, {fromHost: args});
+			args={};
+			args[OSF.DDA.PropertyDescriptors.MessageType]=0;
+			args[OSF.DDA.PropertyDescriptors.MessageContent]=1;
+			parameterMap.setMapping(OSF.DDA.EventDescriptors.DialogMessageReceivedEvent, {fromHost: args});
+			OSF.DDA.SafeArray.Delegate.ParameterMap=parameterMap;
+			}
+	}
 	if (appContext.get_appName()==OSF.AppName.OutlookWebApp) {
 		OSF._OfficeAppFactory.setContext(new OSF.DDA.OutlookContext(appContext, this._settings, license, appContext.appOM));
 		Microsoft.Office.WebExtension.initialize();
@@ -6344,22 +7063,11 @@ OSF.InitializationHelper.prototype.prepareRightBeforeWebExtensionInitialize=func
 		}
 	}
 	else if (appContext.get_osfControlType()===OSF.OsfControlType.DocumentLevel || appContext.get_osfControlType()===OSF.OsfControlType.ContainerLevel) {
-		if (this._hostInfo.isRichClient) {
-			if (appContext.get_isDialog()) {
-				if (OSF.DDA.UI.ChildUI) {
-					appContext.ui=new OSF.DDA.UI.ChildUI();
-				}
-			} else {
-				if (OSF.DDA.UI.ParentUI) {
-					appContext.ui=new OSF.DDA.UI.ParentUI();
-				}
-			}
-		}
 		OSF._OfficeAppFactory.setContext(new OSF.DDA.Context(appContext, appContext.doc, license));
 		var getDelegateMethods, parameterMap;
 		var reason=appContext.get_reason();
 		if (this._hostInfo.isRichClient) {
-			function OSF_DDA_SafeArray_Delegate$MessageParent(args){
+			function OSF_DDA_SafeArray_Delegate_Shared$MessageParent(args){
 				try {
 					if (args.onCalling) {
 						args.onCalling();
@@ -6394,21 +7102,14 @@ OSF.InitializationHelper.prototype.prepareRightBeforeWebExtensionInitialize=func
 			}
 			function getRichClientDelegateMethodsWrapper(actionId){
 				var result=OSF.DDA.DispIdHost.getRichClientDelegateMethods(actionId);
-				result[OSF.DDA.DispIdHost.Delegates.MessageParent]=OSF_DDA_SafeArray_Delegate$MessageParent;
+				if(result[OSF.DDA.DispIdHost.Delegates.MessageParent]==undefined){
+					result[OSF.DDA.DispIdHost.Delegates.MessageParent]=OSF_DDA_SafeArray_Delegate_Shared$MessageParent;
+				}
 				return result;
 			}
 			getDelegateMethods=getRichClientDelegateMethodsWrapper;
-			parameterMap=OSF.DDA.SafeArray.Delegate.ParameterMap;
 			reason=OSF.DDA.RichInitializationReason[reason];
-			var args={};
-			args[OSF.DDA.EventDescriptors.DialogMessageReceivedEvent]=OSF.DDA.SafeArray.Delegate.ParameterMap.self;
-			parameterMap.setMapping(OSF.DDA.EventDispId.dispidDialogMessageReceivedEvent,
-				{fromHost: args});
-			args={};
-			args[OSF.DDA.PropertyDescriptors.MessageType]=0;
-			args[OSF.DDA.PropertyDescriptors.MessageContent]=1;
-			parameterMap.setMapping(OSF.DDA.EventDescriptors.DialogMessageReceivedEvent,
-				{fromHost: args});
+			parameterMap=OSF.DDA.SafeArray.Delegate.ParameterMap;
 		} else {
 			getDelegateMethods=OSF.DDA.DispIdHost.getXLSDelegateMethods;
 			parameterMap=OSF.DDA.XLS.Delegate.ParameterMap;
@@ -6437,6 +7138,7 @@ OSF.InitializationHelper.prototype.loadAppSpecificScriptAndCreateOM=function OSF
 				"8-15.01"   : "outlook-15.01"+suffix,
 				"8-15.02"   : "outlook-15.02"+suffix,
 				"8-15.03"   : "outlook-15.03"+suffix,
+				"8-15.04"   : "outlook-15.04"+suffix,
 				"16-15"     : "excelwebapp-15"+suffix,
 				"16-15.01"  : "excelwebapp-15.01"+suffix,
 				"16-15.02"  : "excelwebapp-15.02"+suffix,

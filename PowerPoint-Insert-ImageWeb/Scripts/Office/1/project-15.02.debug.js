@@ -1,5 +1,5 @@
 /* Project specific JavaScript API library */
-/* Version: 15.0.4777.3000 */
+/* Version: 15.0.4862.1000 */
 /*
 	Copyright (c) Microsoft Corporation.  All rights reserved.
 */
@@ -39,7 +39,9 @@ OSF.OUtil.redefineList(Microsoft.Office.WebExtension.EventType, {
 	DocumentSelectionChanged: "documentSelectionChanged",
 	TaskSelectionChanged: "taskSelectionChanged",
 	ResourceSelectionChanged: "resourceSelectionChanged",
-	ViewSelectionChanged: "viewSelectionChanged"
+	ViewSelectionChanged: "viewSelectionChanged",
+	DialogMessageReceived: "dialogMessageReceived",
+	DialogEventReceived: "dialogEventReceived"
 });
 delete Microsoft.Office.WebExtension.BindingType;
 delete Microsoft.Office.WebExtension.FileType;
@@ -94,6 +96,7 @@ OSF.DDA.DispIdHost.getRichClientDelegateMethods=function (actionId) {
 	delegateMethods[OSF.DDA.DispIdHost.Delegates.ExecuteAsync]=OSF.DDA.SafeArray.Delegate.executeAsync;
 	delegateMethods[OSF.DDA.DispIdHost.Delegates.RegisterEventAsync]=OSF.DDA.SafeArray.Delegate.registerEventAsync;
 	delegateMethods[OSF.DDA.DispIdHost.Delegates.UnregisterEventAsync]=OSF.DDA.SafeArray.Delegate.unregisterEventAsync;
+	delegateMethods[OSF.DDA.DispIdHost.Delegates.MessageParent]=OSF.DDA.SafeArray.Delegate.MessageParent;
 	function getSettingsExecuteMethod(hostDelegateMethod) {
 		return function (args) {
 			var status, response;
@@ -129,6 +132,26 @@ OSF.DDA.DispIdHost.getRichClientDelegateMethods=function (actionId) {
 			break;
 		default:
 			break;
+	}
+	return delegateMethods;
+}
+OSF.DDA.DispIdHost.getClientDelegateMethods=function (actionId) {
+	var delegateMethods={};
+	delegateMethods[OSF.DDA.DispIdHost.Delegates.ExecuteAsync]=OSF.DDA.SafeArray.Delegate.executeAsync;
+	delegateMethods[OSF.DDA.DispIdHost.Delegates.RegisterEventAsync]=OSF.DDA.SafeArray.Delegate.registerEventAsync;
+	delegateMethods[OSF.DDA.DispIdHost.Delegates.UnregisterEventAsync]=OSF.DDA.SafeArray.Delegate.unregisterEventAsync;
+	delegateMethods[OSF.DDA.DispIdHost.Delegates.MessageParent]=OSF.DDA.SafeArray.Delegate.MessageParent;
+	if (OSF.DDA.AsyncMethodNames.RefreshAsync && actionId==OSF.DDA.AsyncMethodNames.RefreshAsync.id) {
+		var readSerializedSettings=function (hostCallArgs, onCalling, onReceiving) {
+			return OSF.DDA.ClientSettingsManager.read(onCalling, onReceiving);
+		};
+		delegateMethods[OSF.DDA.DispIdHost.Delegates.ExecuteAsync]=OSF.DDA.ClientSettingsManager.getSettingsExecuteMethod(readSerializedSettings);
+	}
+	if (OSF.DDA.AsyncMethodNames.SaveAsync && actionId==OSF.DDA.AsyncMethodNames.SaveAsync.id) {
+		var writeSerializedSettings=function (hostCallArgs, onCalling, onReceiving) {
+			return OSF.DDA.ClientSettingsManager.write(hostCallArgs[OSF.DDA.SettingsManager.SerializedSettings], hostCallArgs[Microsoft.Office.WebExtension.Parameters.OverwriteIfStale], onCalling, onReceiving);
+		};
+		delegateMethods[OSF.DDA.DispIdHost.Delegates.ExecuteAsync]=OSF.DDA.ClientSettingsManager.getSettingsExecuteMethod(writeSerializedSettings);
 	}
 	return delegateMethods;
 }
@@ -336,6 +359,7 @@ OSF.DDA.SafeArray.Delegate.SpecialProcessor=function OSF_DDA_SafeArray_Delegate_
 		OSF.DDA.EventDescriptors.DocumentThemeChangedEvent,
 		OSF.DDA.EventDescriptors.OfficeThemeChangedEvent,
 		OSF.DDA.EventDescriptors.ActiveViewChangedEvent,
+		OSF.DDA.EventDescriptors.AppCommandInvokedEvent,
 		OSF.DDA.DataNodeEventProperties.OldNode,
 		OSF.DDA.DataNodeEventProperties.NewNode,
 		OSF.DDA.DataNodeEventProperties.NextSiblingNode,
@@ -1311,6 +1335,39 @@ OSF.DDA.SafeArray.Delegate.unregisterEventAsync=function OSF_DDA_SafeArray_Deleg
 		OSF.DDA.SafeArray.Delegate._onException(ex, args);
 	}
 };
+OSF.DDA.SafeArray.Delegate.MessageParent=function OSF_DDA_SafeArray_Delegate$MessageParent(args){
+	try {
+		if (args.onCalling) {
+			args.onCalling();
+		}
+		var startTime=(new Date()).getTime();
+		var message=args.hostCallArgs[Microsoft.Office.WebExtension.Parameters.MessageToParent];
+		window.external.MessageParent(message);
+		if (args.onReceiving) {
+			args.onReceiving();
+		}
+		if (OSF.AppTelemetry) {
+			OSF.AppTelemetry.onMethodDone(args.dispId, args.hostCallArgs, Math.abs((new Date()).getTime() - startTime), result);
+		}
+		return result;
+	}
+	catch (ex) {
+		var status;
+		var number=ex.number;
+		if (number) {
+		switch (number) {
+			case -2146828218:
+				status=OSF.DDA.ErrorCodeManager.errorCodes.ooeNoCapability;
+				break;
+			case -2146827850:
+			default:
+				status=OSF.DDA.ErrorCodeManager.errorCodes.ooeInternalError;
+				break;
+			}
+		}
+		return status || OSF.DDA.ErrorCodeManager.errorCodes.ooeInternalError;
+	}
+}
 Microsoft.Office.WebExtension.ProjectTaskFields={
 	ActualCost: 0,
 	ActualDuration: 1,

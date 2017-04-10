@@ -1,5 +1,5 @@
 /* PowerPoint specific API library */
-/* Version: 15.0.4777.3000 */
+/* Version: 15.0.4862.1000 */
 /*
 	Copyright (c) Microsoft Corporation.  All rights reserved.
 */
@@ -58,6 +58,7 @@ OSF.DDA.DispIdHost.getRichClientDelegateMethods=function (actionId) {
 	delegateMethods[OSF.DDA.DispIdHost.Delegates.ExecuteAsync]=OSF.DDA.SafeArray.Delegate.executeAsync;
 	delegateMethods[OSF.DDA.DispIdHost.Delegates.RegisterEventAsync]=OSF.DDA.SafeArray.Delegate.registerEventAsync;
 	delegateMethods[OSF.DDA.DispIdHost.Delegates.UnregisterEventAsync]=OSF.DDA.SafeArray.Delegate.unregisterEventAsync;
+	delegateMethods[OSF.DDA.DispIdHost.Delegates.MessageParent]=OSF.DDA.SafeArray.Delegate.MessageParent;
 	function getSettingsExecuteMethod(hostDelegateMethod) {
 		return function (args) {
 			var status, response;
@@ -93,6 +94,26 @@ OSF.DDA.DispIdHost.getRichClientDelegateMethods=function (actionId) {
 			break;
 		default:
 			break;
+	}
+	return delegateMethods;
+}
+OSF.DDA.DispIdHost.getClientDelegateMethods=function (actionId) {
+	var delegateMethods={};
+	delegateMethods[OSF.DDA.DispIdHost.Delegates.ExecuteAsync]=OSF.DDA.SafeArray.Delegate.executeAsync;
+	delegateMethods[OSF.DDA.DispIdHost.Delegates.RegisterEventAsync]=OSF.DDA.SafeArray.Delegate.registerEventAsync;
+	delegateMethods[OSF.DDA.DispIdHost.Delegates.UnregisterEventAsync]=OSF.DDA.SafeArray.Delegate.unregisterEventAsync;
+	delegateMethods[OSF.DDA.DispIdHost.Delegates.MessageParent]=OSF.DDA.SafeArray.Delegate.MessageParent;
+	if (OSF.DDA.AsyncMethodNames.RefreshAsync && actionId==OSF.DDA.AsyncMethodNames.RefreshAsync.id) {
+		var readSerializedSettings=function (hostCallArgs, onCalling, onReceiving) {
+			return OSF.DDA.ClientSettingsManager.read(onCalling, onReceiving);
+		};
+		delegateMethods[OSF.DDA.DispIdHost.Delegates.ExecuteAsync]=OSF.DDA.ClientSettingsManager.getSettingsExecuteMethod(readSerializedSettings);
+	}
+	if (OSF.DDA.AsyncMethodNames.SaveAsync && actionId==OSF.DDA.AsyncMethodNames.SaveAsync.id) {
+		var writeSerializedSettings=function (hostCallArgs, onCalling, onReceiving) {
+			return OSF.DDA.ClientSettingsManager.write(hostCallArgs[OSF.DDA.SettingsManager.SerializedSettings], hostCallArgs[Microsoft.Office.WebExtension.Parameters.OverwriteIfStale], onCalling, onReceiving);
+		};
+		delegateMethods[OSF.DDA.DispIdHost.Delegates.ExecuteAsync]=OSF.DDA.ClientSettingsManager.getSettingsExecuteMethod(writeSerializedSettings);
 	}
 	return delegateMethods;
 }
@@ -254,13 +275,10 @@ OSF.OUtil.redefineList(Microsoft.Office.WebExtension.CoercionType, {
 OSF.OUtil.redefineList(Microsoft.Office.WebExtension.EventType, {
 	DocumentSelectionChanged: "documentSelectionChanged",
 	OfficeThemeChanged: "officeThemeChanged",
-	DocumentThemeChanged: "documentThemeChanged"
-});
-OSF.OUtil.redefineList(Microsoft.Office.WebExtension.EventType, {
-	DocumentSelectionChanged: "documentSelectionChanged",
-	OfficeThemeChanged: "officeThemeChanged",
 	DocumentThemeChanged: "documentThemeChanged",
-	ActiveViewChanged: "activeViewChanged"
+	ActiveViewChanged: "activeViewChanged",
+	DialogMessageReceived: "dialogMessageReceived",
+	DialogEventReceived: "dialogEventReceived"
 });
 OSF.OUtil.redefineList(Microsoft.Office.WebExtension.ValueFormat, {
 	Unformatted: "unformatted"
@@ -365,6 +383,7 @@ OSF.DDA.SafeArray.Delegate.SpecialProcessor=function OSF_DDA_SafeArray_Delegate_
 		OSF.DDA.EventDescriptors.DocumentThemeChangedEvent,
 		OSF.DDA.EventDescriptors.OfficeThemeChangedEvent,
 		OSF.DDA.EventDescriptors.ActiveViewChangedEvent,
+		OSF.DDA.EventDescriptors.AppCommandInvokedEvent,
 		OSF.DDA.DataNodeEventProperties.OldNode,
 		OSF.DDA.DataNodeEventProperties.NewNode,
 		OSF.DDA.DataNodeEventProperties.NextSiblingNode,
@@ -1340,6 +1359,39 @@ OSF.DDA.SafeArray.Delegate.unregisterEventAsync=function OSF_DDA_SafeArray_Deleg
 		OSF.DDA.SafeArray.Delegate._onException(ex, args);
 	}
 };
+OSF.DDA.SafeArray.Delegate.MessageParent=function OSF_DDA_SafeArray_Delegate$MessageParent(args){
+	try {
+		if (args.onCalling) {
+			args.onCalling();
+		}
+		var startTime=(new Date()).getTime();
+		var message=args.hostCallArgs[Microsoft.Office.WebExtension.Parameters.MessageToParent];
+		window.external.MessageParent(message);
+		if (args.onReceiving) {
+			args.onReceiving();
+		}
+		if (OSF.AppTelemetry) {
+			OSF.AppTelemetry.onMethodDone(args.dispId, args.hostCallArgs, Math.abs((new Date()).getTime() - startTime), result);
+		}
+		return result;
+	}
+	catch (ex) {
+		var status;
+		var number=ex.number;
+		if (number) {
+		switch (number) {
+			case -2146828218:
+				status=OSF.DDA.ErrorCodeManager.errorCodes.ooeNoCapability;
+				break;
+			case -2146827850:
+			default:
+				status=OSF.DDA.ErrorCodeManager.errorCodes.ooeInternalError;
+				break;
+			}
+		}
+		return status || OSF.DDA.ErrorCodeManager.errorCodes.ooeInternalError;
+	}
+}
 OSF.DDA.PowerPointDocument=function OSF_DDA_PowerPointDocument(officeAppContext, settings) {
 	OSF.DDA.PowerPointDocument.uber.constructor.call(this, officeAppContext, settings);
 	OSF.DDA.DispIdHost.addAsyncMethods(this, [
@@ -1373,6 +1425,21 @@ Microsoft.Office.WebExtension.Index={
 	Next: "next",
 	Previous: "previous"
 };
+OSF.DDA.SafeArray.Delegate.ParameterMap.define({
+	type: OSF.DDA.EventDispId.dispidDialogMessageReceivedEvent,
+	fromHost: [
+		{ name: OSF.DDA.EventDescriptors.DialogMessageReceivedEvent, value: OSF.DDA.SafeArray.Delegate.ParameterMap.self }
+	],
+	isComplexType: true
+});
+OSF.DDA.SafeArray.Delegate.ParameterMap.define({
+	type: OSF.DDA.EventDescriptors.DialogMessageReceivedEvent,
+	fromHost: [
+		{ name: OSF.DDA.PropertyDescriptors.MessageType, value: 0 },
+		{ name: OSF.DDA.PropertyDescriptors.MessageContent, value: 1 }
+	],
+	isComplexType: true
+});
 OSF.DDA.Slide=function OSF_DDA_Slide(input) {
 	var mapList={
 		"id": {
@@ -1424,6 +1491,17 @@ OSF.DDA.SlideRange=function OSF_DDA_SlideRange(input) {
 OSF.OUtil.extend(OSF.DDA.PowerPointDocument, OSF.DDA.Document);
 OSF.InitializationHelper.prototype.prepareRightBeforeWebExtensionInitialize=function OSF_InitializationHelper$prepareRightBeforeWebExtensionInitialize(appContext) {
 	var license=new OSF.DDA.License(appContext.get_eToken());
+	if (this._hostInfo.isRichClient) {
+		if (appContext.get_isDialog()) {
+			if (OSF.DDA.UI.ChildUI) {
+				appContext.ui=new OSF.DDA.UI.ChildUI();
+			}
+		} else {
+			if (OSF.DDA.UI.ParentUI) {
+				appContext.ui=new OSF.DDA.UI.ParentUI();
+			}
+		}
+	}
 	OSF._OfficeAppFactory.setContext(new OSF.DDA.Context(appContext, appContext.doc, license));
 	var getDelegateMethods, parameterMap;
 	var reason=appContext.get_reason();
@@ -1449,7 +1527,9 @@ OSF.InitializationHelper.prototype.prepareRightBeforeWebExtensionInitialize=func
 	var onComplete=function onComplete(reason) {
 		OSF.OUtil.redefineList(Microsoft.Office.WebExtension.EventType, {
 			DocumentSelectionChanged: "documentSelectionChanged",
-			ActiveViewChanged: "activeViewChanged"
+			ActiveViewChanged: "activeViewChanged",
+			DialogMessageReceived: "dialogMessageReceived",
+			DialogEventReceived: "dialogEventReceived"
 		});
 		Microsoft.Office.WebExtension.initialize(reason);
 	}
